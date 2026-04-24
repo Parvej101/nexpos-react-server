@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "NodeNext", // Node.js এর আধুনিক মডিউল সিস্টেমের জন্য
+    "moduleResolution": "NodeNext",
+    "outDir": "./dist", // কম্পাইল করা ফাইলগুলো এখানে জমা হবে
+    "rootDir": "./", // আপনার সোর্স ফাইলের লোকেশন
+
+    "strict": true, // টাইপ সেফটির জন্য এটি জরুরি
+    "esModuleInterop": true, // CommonJS মডিউলগুলো সহজে ইমপোর্ট করার জন্য
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+
+    // নিচের লাইনগুলো ব্যাকেন্ডের জন্য দরকার নেই বা কিছুটা ঝামেলা করতে পারে
+
+    "verbatimModuleSyntax": false, // এটি ট্রু থাকলে ইমপোর্ট করার সময় অনেক কড়াকড়ি করে
+    "noUncheckedIndexedAccess": true
+  },
+  "include": ["**/*.ts"], // সব .ts ফাইলকে ইনক্লুড করবে
+  "exclude": ["node_modules"] // এগুলোর ভেতর খুঁজবে না
+}
