@@ -27,13 +27,14 @@ const PurchaseSchema = new mongoose.Schema(
       default: "Unpaid",
     },
 
+    referenceNo: { type: String, default: "" },
     // পেমেন্টের হিস্ট্রি (টাইমলাইনের জন্য)
     payments: [
       {
         amount: Number,
         method: String,
         date: { type: Date, default: Date.now },
-        note: String,
+        transactionId: { type: String, default: "" },
       },
     ],
 

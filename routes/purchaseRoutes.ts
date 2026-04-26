@@ -1,6 +1,7 @@
 import express from "express";
 import mongoose from "mongoose";
 import { verifyToken } from "../middleware/authMiddleware.js";
+import { Product } from "../models/Product.js";
 import { Purchase } from "../models/Purchase.js";
 import { Supplier } from "../models/Supplier.js";
 
@@ -140,4 +141,102 @@ router.post("/payment/:purchaseId", verifyToken, async (req: any, res: any) => {
     res.status(500).json({ message: "Failed to record payment" });
   }
 });
+
+// ৩. নতুন পারচেজ অর্ডার তৈরি
+router.post("/create", verifyToken, async (req: any, res: any) => {
+  try {
+    const {
+      items,
+      supplierId,
+      supplierName,
+      totalAmount,
+      paidAmount,
+      paymentMethod,
+      referenceNo,
+      transactionId,
+      date,
+    } = req.body;
+    const tenantId = req.user.tenantId;
+
+    const count = await Purchase.countDocuments({ tenantId });
+    const purchaseId = `PUR-${1000 + count + 1}`;
+
+    // প্রতিটি আইটেমের জন্য লুপ চালিয়ে স্টক বাড়ানো
+    for (const item of items) {
+      await Product.findOneAndUpdate(
+        { _id: item.productId, tenantId },
+        { $inc: { stock: Number(item.quantity) } }, // মাল কেনায় স্টক বাড়বে (+)
+      );
+    }
+
+    const newPurchase = new Purchase({
+      purchaseId,
+      supplierId,
+      supplierName,
+      date,
+      referenceNo,
+      items,
+      totalAmount,
+      paidAmount,
+      paymentStatus:
+        paidAmount >= totalAmount
+          ? "Paid"
+          : paidAmount > 0
+            ? "Partial"
+            : "Unpaid",
+      payments:
+        paidAmount > 0
+          ? [{ amount: paidAmount, method: paymentMethod, transactionId }]
+          : [],
+      tenantId,
+      creatorId: req.user.id,
+    });
+
+    await newPurchase.save();
+    res
+      .status(201)
+      .json({ message: "Stock Updated Successfully!", purchaseId });
+  } catch (error: any) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// ২. সব পারচেজ হিস্ট্রি দেখা
+router.get("/history", verifyToken, async (req: any, res: any) => {
+  try {
+    const { start, end } = req.query; // ফ্রন্টেন্ড থেকে পাঠানো তারিখ
+    const query: any = { tenantId: req.user.tenantId };
+
+    // তারিখ অনুযায়ী ফিল্টার লজিক
+    if (start && end) {
+      query.date = {
+        $gte: new Date(start), // স্টার্ট ডেট থেকে
+        $lte: new Date(new Date(end).setHours(23, 59, 59, 999)), // এন্ড ডেটের একদম শেষ পর্যন্ত
+      };
+    }
+
+    const data = await Purchase.find(query).sort({ createdAt: -1 });
+    res.json(data);
+  } catch (error) {
+    res.status(500).json({ message: "Filter failed" });
+  }
+});
+
+router.get("/:id", verifyToken, async (req: any, res: any) => {
+  try {
+    const { id } = req.params;
+    const tenantId = req.user.tenantId;
+
+    const purchase = await Purchase.findOne({ _id: id, tenantId });
+
+    if (!purchase) {
+      return res.status(404).json({ message: "Purchase record not found" });
+    }
+
+    res.json(purchase);
+  } catch (error: any) {
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
+});
+
 export default router;
