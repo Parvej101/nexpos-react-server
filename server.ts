@@ -10,7 +10,9 @@ import customerRoutes from "./routes/customerRoutes.js";
 import imageKitRoutes from "./routes/imageKitRoutes.js";
 import orderRoutes from "./routes/orderRoutes.js";
 import productRoutes from "./routes/productRoutes.js";
+import purchaseRoutes from "./routes/purchaseRoutes.js";
 import saleRoutes from "./routes/saleRoutes.js";
+import supplierRoutes from "./routes/supplierRoutes.js";
 
 dotenv.config();
 const app = express();
@@ -27,6 +29,8 @@ app.use("/api/customers", customerRoutes);
 app.use("/api/categories", categoryRoutes);
 app.use("/api/adjustments", adjustmentRoutes);
 app.use("/api/orders", orderRoutes);
+app.use("/api/suppliers", supplierRoutes);
+app.use("/api/purchases", purchaseRoutes);
 
 const MONGODB_URI = process.env.MONGODB_URI || "";
 const PORT = process.env.PORT || 5000;
