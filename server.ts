@@ -7,6 +7,7 @@ import adjustmentRoutes from "./routes/adjustmentRoutes.js";
 import authRoutes from "./routes/authRoutes.js";
 import categoryRoutes from "./routes/categoryRoutes.js";
 import customerRoutes from "./routes/customerRoutes.js";
+import expensesRoutes from "./routes/expenseRoutes.js";
 import imageKitRoutes from "./routes/imageKitRoutes.js";
 import orderRoutes from "./routes/orderRoutes.js";
 import productRoutes from "./routes/productRoutes.js";
@@ -31,6 +32,7 @@ app.use("/api/adjustments", adjustmentRoutes);
 app.use("/api/orders", orderRoutes);
 app.use("/api/suppliers", supplierRoutes);
 app.use("/api/purchases", purchaseRoutes);
+app.use("/api/expenses", expensesRoutes);
 
 const MONGODB_URI = process.env.MONGODB_URI || "";
 const PORT = process.env.PORT || 5000;
