@@ -80,13 +80,26 @@ router.post("/create", verifyToken, async (req: any, res: any) => {
 // ২. সব অর্ডারের হিস্ট্রি দেখা (GET /api/orders/history)
 router.get("/history", verifyToken, async (req: any, res: any) => {
   try {
-    const orders = await Order.find({ tenantId: req.user.tenantId })
+    const { start, end } = req.query; // ফ্রন্টেন্ড থেকে পাঠানো তারিখ ধরবে
+    const tenantId = req.user.tenantId;
+
+    let query: any = { tenantId };
+
+    // যদি তারিখ পাঠানো হয়, তবে শুধু ওই নির্দিষ্ট সময়ের ডাটা ফিল্টার করবে
+    if (start && end) {
+      query.createdAt = {
+        $gte: new Date(start), // শুরুর তারিখ থেকে
+        $lte: new Date(new Date(end).setHours(23, 59, 59, 999)), // শেষ তারিখের শেষ সেকেন্ড পর্যন্ত
+      };
+    }
+
+    const orders = await Order.find(query)
       .sort({ createdAt: -1 })
-      .populate("creatorId", "name") // কে সেল করেছে তার নাম
-      .populate("customerId", "name phone"); // কাস্টমারের নাম ও ফোন
+      .populate("customerId", "name phone");
 
     res.json(orders);
-  } catch (error) {
+  } catch (error: any) {
+    console.error("HISTORY_ERROR:", error.message);
     res.status(500).json({ message: "Error fetching history" });
   }
 });
