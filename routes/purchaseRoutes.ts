@@ -204,38 +204,69 @@ router.post("/create", verifyToken, async (req: any, res: any) => {
 // ২. সব পারচেজ হিস্ট্রি দেখা
 router.get("/history", verifyToken, async (req: any, res: any) => {
   try {
-    const { start, end } = req.query; // ফ্রন্টেন্ড থেকে পাঠানো তারিখ
-    const query: any = { tenantId: req.user.tenantId };
+    const { start, end, page = 1, limit = 10, q = "" } = req.query;
+    const tenantId = req.user.tenantId;
 
-    // তারিখ অনুযায়ী ফিল্টার লজিক
-    if (start && end) {
+    let query: any = { tenantId };
+
+    // ১. স্মার্ট ফিল্টার: যদি তারিখ পাঠানো হয় তবেই ফিল্টার হবে
+    // এবং তারিখগুলো যদি "undefined" বা "null" স্ট্রিং না হয়
+    if (
+      start &&
+      end &&
+      start !== "undefined" &&
+      start !== "null" &&
+      start !== ""
+    ) {
       query.date = {
-        $gte: new Date(start), // স্টার্ট ডেট থেকে
-        $lte: new Date(new Date(end).setHours(23, 59, 59, 999)), // এন্ড ডেটের একদম শেষ পর্যন্ত
+        $gte: new Date(start),
+        $lte: new Date(new Date(end).setHours(23, 59, 59, 999)),
       };
     }
 
-    const data = await Purchase.find(query).sort({ createdAt: -1 });
-    res.json(data);
+    // ২. সার্চ কুয়েরি (যদি থাকে)
+    if (q) {
+      query.$or = [
+        { purchaseId: { $regex: q, $options: "i" } },
+        { supplierName: { $regex: q, $options: "i" } },
+      ];
+    }
+
+    const totalRecords = await Purchase.countDocuments(query);
+
+    // ৩. সর্টিং এবং পেজিনেশন (সব সময় নতুন ডাটা আগে আসবে)
+    const purchases = await Purchase.find(query)
+      .sort({ createdAt: -1 }) // Newest First
+      .skip((Number(page) - 1) * Number(limit))
+      .limit(Number(limit))
+      .populate("creatorId", "name");
+
+    res.json({
+      data: purchases,
+      totalPages: Math.ceil(totalRecords / Number(limit)),
+      currentPage: Number(page),
+      totalRecords,
+    });
   } catch (error) {
-    res.status(500).json({ message: "Filter failed" });
+    res.status(500).json({ message: "Server error" });
   }
 });
 
+// একটি নির্দিষ্ট পারচেজ ভাউচারের বিস্তারিত দেখা
 router.get("/:id", verifyToken, async (req: any, res: any) => {
   try {
-    const { id } = req.params;
-    const tenantId = req.user.tenantId;
+    const purchase = await Purchase.findOne({
+      _id: req.params.id,
+      tenantId: req.user.tenantId,
+    })
+      .populate("supplierId", "name phone email") // সাপ্লায়ার ডিটেইলস
+      .populate("creatorId", "name"); // কে ভাউচারটি তৈরি করেছে
 
-    const purchase = await Purchase.findOne({ _id: id, tenantId });
-
-    if (!purchase) {
-      return res.status(404).json({ message: "Purchase record not found" });
-    }
-
+    if (!purchase)
+      return res.status(404).json({ message: "Voucher not found" });
     res.json(purchase);
-  } catch (error: any) {
-    res.status(500).json({ message: "Server error", error: error.message });
+  } catch (error) {
+    res.status(500).json({ message: "Server error" });
   }
 });
 
