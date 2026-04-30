@@ -1,9 +1,12 @@
 import express from "express";
 import mongoose from "mongoose";
 import { verifyToken } from "../middleware/authMiddleware.js";
+import { Customer } from "../models/Customer.js";
+import { Expense } from "../models/Expense.js";
 import { Order } from "../models/Order.js";
 import { Product } from "../models/Product.js";
 import { Purchase } from "../models/Purchase.js";
+import { Supplier } from "../models/Supplier.js";
 
 const router = express.Router();
 
@@ -152,6 +155,130 @@ router.get("/stock-status", verifyToken, async (req: any, res: any) => {
     );
   } catch (error) {
     res.status(500).json({ message: "Stock report failed" });
+  }
+});
+
+// dashboard stats
+router.get("/dashboard-stats", verifyToken, async (req: any, res: any) => {
+  try {
+    const { start, end } = req.query;
+    const tenantId = new mongoose.Types.ObjectId(req.user.tenantId);
+
+    // তারিখ ফিল্টার (শুরু থেকে শেষ দিন রাত ১১:৫৯ পর্যন্ত)
+    const dateFilter = {
+      tenantId,
+      createdAt: {
+        $gte: new Date(start),
+        $lte: new Date(new Date(end).setHours(23, 59, 59, 999)),
+      },
+    };
+
+    // ১. সেলস সামারি
+    const sales = await Order.aggregate([
+      { $match: dateFilter },
+      {
+        $group: {
+          _id: null,
+          total: { $sum: "$total" },
+          due: { $sum: "$dueAmount" },
+          count: { $sum: 1 },
+        },
+      },
+    ]);
+
+    // ২. পারচেজ সামারি (Purchase মডেলে 'date' ফিল্ড থাকলে সেটি ব্যবহার করুন)
+    const purchases = await Purchase.aggregate([
+      {
+        $match: {
+          tenantId,
+          date: {
+            $gte: new Date(start),
+            $lte: new Date(new Date(end).setHours(23, 59, 59, 999)),
+          },
+        },
+      },
+      {
+        $group: {
+          _id: null,
+          total: { $sum: "$totalAmount" },
+          due: { $sum: { $subtract: ["$totalAmount", "$paidAmount"] } },
+        },
+      },
+    ]);
+
+    // ৩. এক্সপেন্স সামারি
+    const expenses = await Expense.aggregate([
+      { $match: dateFilter },
+      { $group: { _id: null, total: { $sum: "$amount" } } },
+    ]);
+
+    // ৪. Flow Analytics (Revenue Stream Chart)
+    const flow = await Order.aggregate([
+      { $match: dateFilter },
+      {
+        $group: {
+          _id:
+            start === end
+              ? { $hour: "$createdAt" }
+              : { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
+          amount: { $sum: "$total" },
+        },
+      },
+      { $sort: { _id: 1 } },
+    ]);
+
+    const formattedFlow = flow.map((f) => {
+      let label = f._id.toString();
+      if (start === end) {
+        const hr = f._id;
+        label =
+          hr >= 12
+            ? `${hr === 12 ? 12 : hr - 12} PM`
+            : `${hr === 0 ? 12 : hr} AM`;
+      } else {
+        label = new Date(f._id).toLocaleDateString("en-US", {
+          month: "short",
+          day: "numeric",
+        });
+      }
+      return { label, amount: f.amount };
+    });
+
+    // ৫. Volume Split (Category Chart)
+    const volume = await Order.aggregate([
+      { $match: dateFilter },
+      { $unwind: "$items" },
+      {
+        $group: {
+          _id: { $ifNull: ["$items.category", "General"] },
+          value: { $sum: "$items.total" },
+        },
+      },
+      { $project: { name: "$_id", value: 1, _id: 0 } },
+      { $sort: { value: -1 } },
+    ]);
+
+    // ৬. Lifetime Counts
+    const [custs, supps, prods] = await Promise.all([
+      Customer.countDocuments({ tenantId }),
+      Supplier.countDocuments({ tenantId }),
+      Product.countDocuments({ tenantId }),
+    ]);
+
+    res.json({
+      financials: {
+        salesTotal: sales[0]?.total || 0,
+        salesDue: sales[0]?.due || 0,
+        purchaseDue: purchases[0]?.due || 0,
+        expenseTotal: expenses[0]?.total || 0,
+        orderCount: sales[0]?.count || 0,
+      },
+      counts: { customers: custs, suppliers: supps, products: prods },
+      flowAnalytics: formattedFlow,
+      volumeSplit: volume,
+    });
+  } catch (error: any) {
+    res.status(500).json({ message: error.message });
   }
 });
 
