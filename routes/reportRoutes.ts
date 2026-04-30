@@ -80,7 +80,7 @@ router.get("/sales-items", verifyToken, async (req: any, res: any) => {
     const { start, end } = req.query;
     const tenantId = new mongoose.Types.ObjectId(req.user.tenantId);
 
-    const itemReport = await Order.aggregate([
+    const report = await Order.aggregate([
       {
         $match: {
           tenantId,
@@ -90,19 +90,35 @@ router.get("/sales-items", verifyToken, async (req: any, res: any) => {
           },
         },
       },
-      { $unwind: "$items" }, // অর্ডারের ভেতরের আইটেম লিস্ট খোলা
+      { $unwind: "$items" }, // অর্ডার থেকে প্রতিটি আইটেমকে আলাদা রো করা
       {
-        $group: {
-          _id: "$items.productId",
-          name: { $first: "$items.name" },
-          totalQty: { $sum: "$items.quantity" },
-          revenue: { $sum: "$items.total" },
+        $lookup: {
+          // কাস্টমার ডাটা আনা
+          from: "customers",
+          localField: "customerId",
+          foreignField: "_id",
+          as: "customer",
         },
       },
-      { $sort: { totalQty: -1 } },
+      {
+        $project: {
+          _id: "$_id", // মেইন অর্ডার আইডি (ডিটেইলে যাওয়ার জন্য)
+          orderId: "$orderId",
+          date: "$createdAt",
+          customerName: {
+            $ifNull: [{ $arrayElemAt: ["$customer.name", 0] }, "Walk-in"],
+          },
+          itemName: "$items.name",
+          category: "$items.category", // যদি মডেলে থাকে
+          quantity: "$items.quantity",
+          price: "$items.price",
+          total: "$items.total",
+        },
+      },
+      { $sort: { date: -1 } },
     ]);
 
-    res.json(itemReport);
+    res.json(report);
   } catch (error) {
     res.status(500).json({ message: "Item report failed" });
   }

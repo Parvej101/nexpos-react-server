@@ -38,9 +38,10 @@ router.post("/create", verifyToken, async (req: any, res: any) => {
       processedItems.push({
         productId: item._id,
         name: item.name,
-        price: Number(item.price) || 0,
-        quantity: Number(item.quantity) || 0,
-        total: (Number(item.price) || 0) * (Number(item.quantity) || 0),
+        category: item.category,
+        price: Number(item.price),
+        quantity: Number(item.quantity),
+        total: Number(item.price * item.quantity),
       });
     }
 

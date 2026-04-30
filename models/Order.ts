@@ -8,9 +8,10 @@ const OrderItemSchema = new mongoose.Schema({
     required: true,
   },
   name: { type: String, required: true },
-  price: { type: Number, required: true }, // ওই সময়ের বিক্রয় মূল্য
+  price: { type: Number, required: true },
   quantity: { type: Number, required: true },
-  total: { type: Number, required: true }, // price * quantity
+  total: { type: Number, required: true },
+  category: { type: String },
 });
 
 const OrderSchema = new mongoose.Schema(
