@@ -135,6 +135,7 @@ router.get("/stock-status", verifyToken, async (req: any, res: any) => {
         $group: {
           _id: null,
           totalItems: { $sum: 1 },
+          // স্টক এবং কেনা দাম গুণ করে মোট ভ্যালু বের করা
           totalStockValue: {
             $sum: { $multiply: ["$stock", "$purchasePrice"] },
           },
@@ -145,6 +146,7 @@ router.get("/stock-status", verifyToken, async (req: any, res: any) => {
       },
     ]);
 
+    // যদি ডাটাবেস একদম খালি থাকে তবে ডিফল্ট জিরো পাঠাবে
     res.json(
       stockStats[0] || { totalItems: 0, totalStockValue: 0, lowStockItems: 0 },
     );
