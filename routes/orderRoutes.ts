@@ -13,7 +13,7 @@ router.post("/create", verifyToken, async (req: any, res: any) => {
     const tenantId = req.user.tenantId;
     const creatorId = req.user.id;
 
-    // ১. ডাটা স্যানিটাইজেশন (NaN এরর ঠেকানোর জন্য সবথেকে জরুরি)
+    // ১. ডাটা স্যানিটাইজেশন
     const cleanSubtotal = Number(subtotal) || 0;
     const cleanTotalPaid = Number(totalPaid) || 0;
     const cleanDue = Number(due) || 0;
@@ -23,7 +23,7 @@ router.post("/create", verifyToken, async (req: any, res: any) => {
       return res.status(400).json({ message: "Cart is empty!" });
     }
 
-    // ২. ইনভয়েস আইডি
+    // ২. ইনভয়েস আইডি জেনারেট করা
     const count = await Order.countDocuments({ tenantId });
     const orderId = `INV-${1000 + count + 1}`;
 
@@ -45,14 +45,14 @@ router.post("/create", verifyToken, async (req: any, res: any) => {
       });
     }
 
-    // ৪. নতুন অর্ডার তৈরি
+    // ৪. নতুন অর্ডার অবজেক্ট তৈরি
     const newOrder = new Order({
       orderId,
       items: processedItems,
       subtotal: cleanSubtotal,
       tax: 0,
       discount: 0,
-      total: cleanSubtotal, // আপনার মডেলে total required
+      total: cleanSubtotal,
       totalPaid: cleanTotalPaid,
       dueAmount: cleanDue,
       changeAmount: cleanChange,
@@ -70,8 +70,19 @@ router.post("/create", verifyToken, async (req: any, res: any) => {
       creatorId,
     });
 
-    await newOrder.save();
-    res.status(201).json({ message: "Order Placed Successfully!", orderId });
+    // ৫. ডাটাবেসে সেভ করা
+    const savedOrder = await newOrder.save();
+
+    // ৬. [নতুন] প্রিন্টের জন্য কাস্টমার এবং ইউজারের নামসহ ডাটা পপুলেট করা
+    const fullOrderData = await Order.findById(savedOrder._id)
+      .populate("customerId", "name phone email")
+      .populate("creatorId", "name");
+
+    // ৭. পুরো অর্ডার অবজেক্টটি ফ্রন্টেন্ডে পাঠানো
+    res.status(201).json({
+      message: "Order Placed Successfully!",
+      order: fullOrderData,
+    });
   } catch (error: any) {
     console.error("ORDER_SAVE_ERROR:", error.message);
     res.status(500).json({ message: "Server Error", error: error.message });
