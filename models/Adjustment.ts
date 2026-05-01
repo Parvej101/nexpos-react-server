@@ -10,6 +10,8 @@ const AdjustmentItemSchema = new mongoose.Schema({
   name: { type: String, required: true },
   type: { type: String, enum: ["addition", "subtraction"], required: true },
   amount: { type: Number, required: true },
+  previousStock: { type: Number, default: 0 },
+  newStock: { type: Number, default: 0 },
   purchasePrice: { type: Number, default: 0 },
   itemTotalValue: { type: Number, default: 0 },
 });
@@ -20,7 +22,7 @@ const AdjustmentSchema = new mongoose.Schema(
     reason: { type: String, required: true },
     note: { type: String, default: "" },
     totalValueChange: { type: Number, default: 0 },
-    items: [AdjustmentItemSchema], // এখানে ওপরের স্কিমাটি ব্যবহার করা হলো
+    items: [AdjustmentItemSchema],
     tenantId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Tenant",

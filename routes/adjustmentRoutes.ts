@@ -10,7 +10,6 @@ router.post("/add", verifyToken, async (req: any, res: any) => {
     const { items, reason, note } = req.body;
     const tenantId = req.user.tenantId;
 
-    // ১. সিরিয়াল আইডি জেনারেট
     const lastRecord = await Adjustment.findOne({ tenantId }).sort({
       adjustmentId: -1,
     });
@@ -25,23 +24,30 @@ router.post("/add", verifyToken, async (req: any, res: any) => {
 
       const adjQty = Number(item.amount) || 0;
       const buyPrice = Number(product.purchasePrice) || 0;
-      const itemValue = adjQty * buyPrice;
 
-      const valueImpact = item.type === "addition" ? itemValue : -itemValue;
-      totalValueChange += valueImpact;
+      // ১. অডিটের আগের স্টক (Previous Stock)
+      const previousStock = product.stock;
 
-      // স্টক আপডেট
-      await Product.findByIdAndUpdate(item.id, {
-        $inc: { stock: item.type === "addition" ? adjQty : -adjQty },
-      });
+      // ২. অডিটের পরের স্টক (New Stock)
+      const change = item.type === "addition" ? adjQty : -adjQty;
+      const newStock = previousStock + change;
 
+      totalValueChange +=
+        adjQty * buyPrice * (item.type === "addition" ? 1 : -1);
+
+      // ৩. মেইন প্রোডাক্টের স্টক আপডেট
+      await Product.findByIdAndUpdate(item.id, { $set: { stock: newStock } });
+
+      // ৪. লিস্টে সব ডাটা পুশ করা
       processedItems.push({
         productId: item.id,
         name: item.name,
         type: item.type,
         amount: adjQty,
+        previousStock: previousStock, // এটি সেভ হচ্ছে
+        newStock: newStock, // এটিও সেভ হচ্ছে
         purchasePrice: buyPrice,
-        itemTotalValue: itemValue,
+        itemTotalValue: adjQty * buyPrice,
       });
     }
 
@@ -58,10 +64,10 @@ router.post("/add", verifyToken, async (req: any, res: any) => {
     await newAdjustment.save();
     res.status(201).json({ message: "Stock Synced!", adjustmentId: nextId });
   } catch (error: any) {
-    console.error("AUDIT_SAVE_ERROR:", error.message);
-    res.status(500).json({ message: "Database Error", error: error.message });
+    res.status(500).json({ message: error.message });
   }
 });
+
 // একটি নির্দিষ্ট অডিটের বিস্তারিত দেখা (GET /api/adjustments/:id)
 router.get("/:id", verifyToken, async (req: any, res: any) => {
   try {

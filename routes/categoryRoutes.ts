@@ -1,4 +1,5 @@
 import express from "express";
+import mongoose from "mongoose";
 import { verifyToken } from "../middleware/authMiddleware.js";
 import { Category } from "../models/Category.js";
 
@@ -7,10 +8,29 @@ const router = express.Router();
 // ১. নিজের দোকানের সব ক্যাটাগরি দেখা (GET /api/categories)
 router.get("/", verifyToken, async (req: any, res: any) => {
   try {
-    const categories = await Category.find({
-      tenantId: req.user.tenantId,
-    }).sort({ name: 1 });
-    res.json(categories);
+    const tenantId = new mongoose.Types.ObjectId(req.user.tenantId);
+
+    // মঙ্গুজ এগ্রিগেশন ব্যবহার করে ক্যাটাগরি এবং প্রোডাক্ট কাউন্ট বের করা
+    const categoriesWithCount = await Category.aggregate([
+      { $match: { tenantId } },
+      {
+        $lookup: {
+          from: "products",
+          localField: "name",
+          foreignField: "category",
+          as: "linkedProducts",
+        },
+      },
+      {
+        $addFields: {
+          productCount: { $size: "$linkedProducts" }, // কতটি আলাদা প্রোডাক্ট
+          totalStock: { $sum: "$linkedProducts.stock" }, // মোট কত পিস মাল
+        },
+      },
+      { $project: { linkedProducts: 0 } },
+    ]);
+
+    res.json(categoriesWithCount);
   } catch (error) {
     res.status(500).json({ message: "Error fetching categories" });
   }

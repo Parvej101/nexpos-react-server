@@ -2,14 +2,8 @@ import mongoose from "mongoose";
 
 const TenantSchema = new mongoose.Schema(
   {
-    name: { type: String, required: true }, // দোকানের নাম
-    address: { type: String },
-    phone: { type: String },
-    subscriptionStatus: {
-      type: String,
-      enum: ["active", "expired"],
-      default: "active",
-    },
+    name: { type: String, required: true },
+    status: { type: String, enum: ["active", "inactive"], default: "active" },
   },
   { timestamps: true },
 );

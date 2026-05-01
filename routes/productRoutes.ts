@@ -1,5 +1,5 @@
 import express from "express";
-import { checkRole, verifyToken } from "../middleware/authMiddleware.js";
+import { verifyToken } from "../middleware/authMiddleware.js";
 import { Product } from "../models/Product.js";
 
 const router = express.Router();
@@ -30,97 +30,86 @@ router.get("/:id", verifyToken, async (req: any, res: any) => {
   }
 });
 
-// ৩. প্রোডাক্ট যোগ করা (Admin/Manager পারবে)
+// ৩. নতুন প্রোডাক্ট যোগ করা
 router.post("/add", verifyToken, async (req: any, res: any) => {
   try {
-    const { barcode } = req.body;
+    // ১. নিশ্চিত করুন এখানে 'image' লেখা আছে
+    const {
+      name,
+      barcode,
+      price,
+      purchasePrice,
+      category,
+      stock,
+      unit,
+      alertQty,
+      image,
+    } = req.body;
     const tenantId = req.user.tenantId;
 
-    let finalBarcode = barcode;
+    let finalBarcode = barcode?.trim();
 
-    // ১. যদি ইউজার বারকোড না দেয় (খালি রাখে), তবে অটো-জেনারেট হবে
-    if (!finalBarcode || finalBarcode.trim() === "") {
-      // ওই দোকানের শেষ অটো-জেনারেটেড (IT দিয়ে শুরু) প্রোডাক্টটি খোঁজা
-      const lastAutoProduct = await Product.findOne({
+    // অটো-বারকোড লজিক (আগের মতোই)
+    if (!finalBarcode || finalBarcode === "") {
+      const itProducts = await Product.find({
         tenantId,
-        barcode: { $regex: /^IT/ }, // শুধু IT দিয়ে শুরু হওয়া বারকোড খুঁজবে
-      }).sort({ createdAt: -1 });
-
-      let nextNumber = 1;
-      if (lastAutoProduct && lastAutoProduct.barcode) {
-        const lastCodeNumber = parseInt(
-          lastAutoProduct.barcode.replace("IT", ""),
-        );
-        if (!isNaN(lastCodeNumber)) {
-          nextNumber = lastCodeNumber + 1;
-        }
-      }
-      finalBarcode = `IT${nextNumber}`;
+        barcode: { $regex: /^IT\d+$/ },
+      }).select("barcode");
+      let maxNumber = 0;
+      itProducts.forEach((p) => {
+        const currentNum = parseInt(p.barcode.replace("IT", ""));
+        if (!isNaN(currentNum) && currentNum > maxNumber)
+          maxNumber = currentNum;
+      });
+      finalBarcode = `IT${maxNumber + 1}`;
     }
 
-    // ২. চেক করা যে এই বারকোডটি অলরেডি ডাটাবেসে আছে কি না (ইউনিকনেস চেক)
-    const existingProduct = await Product.findOne({
-      barcode: finalBarcode,
-      tenantId,
-    });
-    if (existingProduct) {
-      return res
-        .status(400)
-        .json({ message: "This Barcode/SKU already exists!" });
-    }
-
-    // ৩. নতুন প্রোডাক্ট তৈরি
+    // ২. নতুন প্রোডাক্ট অবজেক্ট তৈরি
     const newProduct = new Product({
-      ...req.body,
-      barcode: finalBarcode, // ইউজার দিলে সেটি, না দিলে অটো-জেনারেটেড
+      name,
+      barcode: finalBarcode,
+      category,
+      price: Number(price) || 0,
+      purchasePrice: Number(purchasePrice) || 0,
+      stock: Number(stock) || 0,
+      unit: unit || "pcs",
+      alertQty: Number(alertQty) || 5,
+      image: image || "", // এটি নিশ্চিত করুন
       tenantId: tenantId,
     });
 
     await newProduct.save();
     res.status(201).json(newProduct);
   } catch (error: any) {
-    console.error("PRODUCT_ADD_ERROR:", error.message);
-    res.status(500).json({ message: "Failed to add product" });
+    res.status(500).json({ message: error.message });
+  }
+});
+// ৪. প্রোডাক্ট আপডেট করা (সিকিউরিটি এখন server.ts থেকে হ্যান্ডেল হবে)
+router.patch("/:id", verifyToken, async (req: any, res: any) => {
+  try {
+    const updatedProduct = await Product.findOneAndUpdate(
+      { _id: req.params.id, tenantId: req.user.tenantId },
+      req.body,
+      { new: true },
+    );
+    res.json(updatedProduct);
+  } catch (error) {
+    res.status(500).json({ message: "Error updating product" });
   }
 });
 
-// ৪. প্রোডাক্ট আপডেট করা
-router.patch(
-  "/:id",
-  verifyToken,
-  checkRole(["admin", "manager"]),
-  async (req: any, res: any) => {
-    try {
-      const updatedProduct = await Product.findOneAndUpdate(
-        { _id: req.params.id, tenantId: req.user.tenantId },
-        req.body,
-        { new: true },
-      );
-      res.json(updatedProduct);
-    } catch (error) {
-      res.status(500).json({ message: "Error updating product" });
-    }
-  },
-);
-
-// ৫. প্রোডাক্ট ডিলিট করা (শুধু Admin পারবে)
-router.delete(
-  "/:id",
-  verifyToken,
-  checkRole(["admin"]),
-  async (req: any, res: any) => {
-    try {
-      const deleted = await Product.findOneAndDelete({
-        _id: req.params.id,
-        tenantId: req.user.tenantId,
-      });
-      if (!deleted)
-        return res.status(404).json({ message: "Product not found" });
-      res.json({ message: "Product deleted successfully" });
-    } catch (error) {
-      res.status(500).json({ message: "Error deleting product" });
-    }
-  },
-);
+// ৫. প্রোডাক্ট ডিলিট করা (সিকিউরিটি এখন server.ts থেকে হ্যান্ডেল হবে)
+router.delete("/:id", verifyToken, async (req: any, res: any) => {
+  try {
+    const deleted = await Product.findOneAndDelete({
+      _id: req.params.id,
+      tenantId: req.user.tenantId,
+    });
+    if (!deleted) return res.status(404).json({ message: "Product not found" });
+    res.json({ message: "Product deleted successfully" });
+  } catch (error) {
+    res.status(500).json({ message: "Error deleting product" });
+  }
+});
 
 export default router;

@@ -50,27 +50,26 @@ router.post("/register-shop", async (req: any, res: any) => {
 router.post("/login", async (req: any, res: any) => {
   try {
     const { email, password } = req.body;
-
-    // ইউজার খুঁজে বের করা
     const user = await User.findOne({ email });
-    if (!user) {
-      return res.status(401).json({ message: "Invalid email or password" });
+
+    if (!user || !(await bcrypt.compare(password, user.password))) {
+      return res.status(401).json({ message: "Invalid credentials" });
     }
 
-    // পাসওয়ার্ড চেক করা
-    const isPasswordValid = await bcrypt.compare(password, user.password);
-    if (!isPasswordValid) {
-      return res.status(401).json({ message: "Invalid email or password" });
+    // [লগইন সিকিউরিটি] দোকান সচল কি না চেক করা
+    const tenant = await Tenant.findById(user.tenantId);
+    if (!tenant || tenant.status === "inactive") {
+      return res
+        .status(403)
+        .json({ message: "Account suspended. Please contact support." });
     }
 
-    // সিকিউর টোকেন (JWT) তৈরি করা
     const token = jwt.sign(
       { id: user._id, role: user.role, tenantId: user.tenantId },
       process.env.JWT_SECRET || "secret_key",
       { expiresIn: "1d" },
     );
 
-    // সাকসেস মেসেজ এবং টোকেন পাঠানো
     res.json({
       token,
       user: {
@@ -81,7 +80,6 @@ router.post("/login", async (req: any, res: any) => {
       },
     });
   } catch (error) {
-    console.error(error);
     res.status(500).json({ message: "Login failed" });
   }
 });
