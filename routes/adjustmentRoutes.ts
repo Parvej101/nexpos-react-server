@@ -10,6 +10,21 @@ router.post("/add", verifyToken, async (req: any, res: any) => {
     const { items, reason, note } = req.body;
     const tenantId = req.user.tenantId;
 
+    // ১. আগে সব আইটেম চেক করে নেওয়া (যাতে অর্ধেক সেভ হয়ে পরে এরর না দেয়)
+    for (const item of items) {
+      const product = await Product.findById(item.id);
+      if (!product) continue;
+
+      const adjQty = Number(item.amount) || 0;
+      if (item.type === "subtraction" && product.stock < adjQty) {
+        // যদি বিয়োগ করার পরিমাণ বর্তমান স্টকের চেয়ে বেশি হয়
+        return res.status(400).json({
+          message: `Insufficient stock for ${product.name}. Current: ${product.stock}, trying to subtract: ${adjQty}`,
+        });
+      }
+    }
+
+    // ২. সিরিয়াল আইডি জেনারেট
     const lastRecord = await Adjustment.findOne({ tenantId }).sort({
       adjustmentId: -1,
     });
@@ -18,34 +33,32 @@ router.post("/add", verifyToken, async (req: any, res: any) => {
     let totalValueChange = 0;
     const processedItems = [];
 
+    // ৩. এবার স্টক আপডেট এবং প্রসেসিং শুরু
     for (const item of items) {
       const product = await Product.findById(item.id);
       if (!product) continue;
 
       const adjQty = Number(item.amount) || 0;
       const buyPrice = Number(product.purchasePrice) || 0;
-
-      // ১. অডিটের আগের স্টক (Previous Stock)
       const previousStock = product.stock;
 
-      // ২. অডিটের পরের স্টক (New Stock)
       const change = item.type === "addition" ? adjQty : -adjQty;
       const newStock = previousStock + change;
 
+      // আর্থিক হিসাব
       totalValueChange +=
         adjQty * buyPrice * (item.type === "addition" ? 1 : -1);
 
-      // ৩. মেইন প্রোডাক্টের স্টক আপডেট
+      // মেইন প্রোডাক্টের স্টক আপডেট (এখানে আর নেগেটিভ হওয়ার ভয় নেই)
       await Product.findByIdAndUpdate(item.id, { $set: { stock: newStock } });
 
-      // ৪. লিস্টে সব ডাটা পুশ করা
       processedItems.push({
         productId: item.id,
         name: item.name,
         type: item.type,
         amount: adjQty,
-        previousStock: previousStock, // এটি সেভ হচ্ছে
-        newStock: newStock, // এটিও সেভ হচ্ছে
+        previousStock,
+        newStock,
         purchasePrice: buyPrice,
         itemTotalValue: adjQty * buyPrice,
       });
@@ -67,7 +80,6 @@ router.post("/add", verifyToken, async (req: any, res: any) => {
     res.status(500).json({ message: error.message });
   }
 });
-
 // একটি নির্দিষ্ট অডিটের বিস্তারিত দেখা (GET /api/adjustments/:id)
 router.get("/:id", verifyToken, async (req: any, res: any) => {
   try {
