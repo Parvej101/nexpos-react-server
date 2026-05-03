@@ -13,26 +13,45 @@ router.post("/create", verifyToken, async (req: any, res: any) => {
     const tenantId = req.user.tenantId;
     const creatorId = req.user.id;
 
-    // ১. ডাটা স্যানিটাইজেশন
+    if (!items || items.length === 0) {
+      return res.status(400).json({ message: "Cart is empty!" });
+    }
+
+    // --- ধাপ ১: স্টক ভ্যালিডেশন (সবথেকে গুরুত্বপূর্ণ) ---
+    // আমরা প্রথমে চেক করব সব আইটেমের পর্যাপ্ত স্টক আছে কি না
+    for (const item of items) {
+      const product = await Product.findOne({ _id: item._id, tenantId });
+
+      if (!product) {
+        return res
+          .status(404)
+          .json({ message: `Product "${item.name}" not found in inventory!` });
+      }
+
+      if (product.stock < Number(item.quantity)) {
+        return res.status(400).json({
+          message: `Insufficient stock for "${product.name}". Available: ${product.stock}, Requested: ${item.quantity}`,
+        });
+      }
+    }
+
+    // --- ধাপ ২: ডাটা স্যানিটাইজেশন ---
     const cleanSubtotal = Number(subtotal) || 0;
     const cleanTotalPaid = Number(totalPaid) || 0;
     const cleanDue = Number(due) || 0;
     const cleanChange = Number(change) || 0;
 
-    if (!items || items.length === 0) {
-      return res.status(400).json({ message: "Cart is empty!" });
-    }
-
-    // ২. ইনভয়েস আইডি জেনারেট করা
+    // --- ধাপ ৩: ইনভয়েস আইডি জেনারেট করা ---
     const count = await Order.countDocuments({ tenantId });
     const orderId = `INV-${1000 + count + 1}`;
 
-    // ৩. স্টক আপডেট এবং আইটেম প্রসেস
+    // --- ধাপ ৪: স্টক আপডেট এবং আইটেম প্রসেস ---
     const processedItems = [];
     for (const item of items) {
+      // স্টক কমানো
       await Product.findOneAndUpdate(
         { _id: item._id, tenantId },
-        { $inc: { stock: -Number(item.quantity || 0) } },
+        { $inc: { stock: -Number(item.quantity) } },
       );
 
       processedItems.push({
@@ -45,7 +64,7 @@ router.post("/create", verifyToken, async (req: any, res: any) => {
       });
     }
 
-    // ৪. নতুন অর্ডার অবজেক্ট তৈরি
+    // --- ধাপ ৫: নতুন অর্ডার অবজেক্ট তৈরি ---
     const newOrder = new Order({
       orderId,
       items: processedItems,
@@ -70,22 +89,22 @@ router.post("/create", verifyToken, async (req: any, res: any) => {
       creatorId,
     });
 
-    // ৫. ডাটাবেসে সেভ করা
     const savedOrder = await newOrder.save();
 
-    // ৬. [নতুন] প্রিন্টের জন্য কাস্টমার এবং ইউজারের নামসহ ডাটা পপুলেট করা
+    // প্রিন্টের জন্য ডাটা পপুলেট করা
     const fullOrderData = await Order.findById(savedOrder._id)
       .populate("customerId", "name phone email")
       .populate("creatorId", "name");
 
-    // ৭. পুরো অর্ডার অবজেক্টটি ফ্রন্টেন্ডে পাঠানো
     res.status(201).json({
       message: "Order Placed Successfully!",
       order: fullOrderData,
     });
   } catch (error: any) {
     console.error("ORDER_SAVE_ERROR:", error.message);
-    res.status(500).json({ message: "Server Error", error: error.message });
+    res
+      .status(500)
+      .json({ message: "Internal Server Error", error: error.message });
   }
 });
 
@@ -130,6 +149,40 @@ router.get("/:id", verifyToken, async (req: any, res: any) => {
     res.json(order);
   } catch (error) {
     res.status(500).json({ message: "Error fetching order detail" });
+  }
+});
+
+// কাস্টমার ডিউ পেমেন্ট রেকর্ড করা (POST /api/orders/pay-due/:id)
+router.post("/pay-due/:id", verifyToken, async (req: any, res: any) => {
+  try {
+    const { amount, method } = req.body;
+    const tenantId = req.user.tenantId;
+
+    const order = await Order.findOne({ _id: req.params.id, tenantId });
+    if (!order) return res.status(404).json({ message: "Order not found" });
+
+    // নতুন হিসাব
+    const newPaidAmount = Number(order.totalPaid) + Number(amount);
+    const newDueAmount = Number(order.total) - newPaidAmount;
+
+    // পেমেন্ট মেথড আপডেট (যদি আগে Mixed না থাকে এবং নতুন মেথড আলাদা হয়)
+    const newStatus = newDueAmount <= 0 ? "completed" : "pending";
+
+    await Order.findByIdAndUpdate(req.params.id, {
+      $set: {
+        totalPaid: newPaidAmount,
+        dueAmount: Math.max(0, newDueAmount),
+        status: newStatus,
+      },
+      // পেমেন্ট হিস্ট্রিতে নতুন ট্রানজ্যাকশন যোগ করা (যদি মডেলে থাকে, না থাকলে শুধু উপরের গুলো হবে)
+      $push: {
+        paymentHistory: { amount, method, date: new Date() },
+      },
+    });
+
+    res.json({ message: "Payment updated!", newDue: newDueAmount });
+  } catch (error) {
+    res.status(500).json({ message: "Update failed" });
   }
 });
 

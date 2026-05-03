@@ -38,4 +38,19 @@ router.post(
   },
 );
 
+router.get("/list", verifyToken, async (req: any, res: any) => {
+  try {
+    const tenantId = req.user.tenantId;
+
+    // শুধু নিজের দোকানের ইউজারদের খুঁজে বের করা (পাসওয়ার্ড ছাড়া)
+    const staff = await User.find({ tenantId })
+      .select("-password")
+      .sort({ createdAt: -1 });
+
+    res.json(staff);
+  } catch (error) {
+    res.status(500).json({ message: "Failed to fetch staff list" });
+  }
+});
+
 export default router;

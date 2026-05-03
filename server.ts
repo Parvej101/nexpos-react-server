@@ -49,17 +49,16 @@ app.use("/api/orders", authorize(allRoles), orderRoutes);
 app.use("/api/customers", authorize(allRoles), customerRoutes);
 app.use("/api/categories", authorize(allRoles), categoryRoutes);
 app.use("/api/expenses", authorize(allRoles), expensesRoutes);
-app.use("/api/reports", authorize(allRoles), reportRoutes); // আপনার রিকোয়েস্ট অনুযায়ী ক্যাশিয়ারকে এক্সেস দেওয়া হলো
-
+app.use("/api/reports", authorize(allRoles), reportRoutes);
+app.use("/api/products", authorize(allRoles), productRoutes);
+app.use("/api/purchases", authorize(allRoles), purchaseRoutes);
+app.use("/api/suppliers", authorize(allRoles), supplierRoutes);
 // ---------------------------------------------------------
 // ৪. ম্যানেজমেন্ট রাউট (ক্যাশিয়ার এগুলো করতে পারবে না)
 // শুধু Super Admin এবং Shop Owner এক্সেস পাবে
 // ---------------------------------------------------------
 const managementRoles = ["super_admin", "shop_owner"];
 
-app.use("/api/products", authorize(managementRoles), productRoutes);
-app.use("/api/suppliers", authorize(managementRoles), supplierRoutes);
-app.use("/api/purchases", authorize(managementRoles), purchaseRoutes);
 app.use("/api/adjustments", authorize(managementRoles), adjustmentRoutes);
 app.use("/api/users", authorize(managementRoles), userRoutes);
 
