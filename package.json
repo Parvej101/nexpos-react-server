@@ -4,9 +4,9 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "dev": "nodemon --exec tsx server.ts",
-    "start": "tsx server.ts",
-    "build": "tsc"
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "dev": "nodemon --exec tsx server.ts"
   },
   "keywords": [],
   "author": "",
