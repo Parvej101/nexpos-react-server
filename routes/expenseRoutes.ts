@@ -63,7 +63,7 @@ router.patch("/:id", verifyToken, async (req: any, res: any) => {
     const updatedExpense = await Expense.findOneAndUpdate(
       { _id: req.params.id, tenantId: req.user.tenantId },
       req.body,
-      { new: true },
+      { returnDocument: "after" },
     );
     if (!updatedExpense)
       return res.status(404).json({ message: "Expense not found" });

@@ -21,7 +21,7 @@ router.patch("/:id", verifyToken, async (req: any, res: any) => {
     const updatedCustomer = await Customer.findOneAndUpdate(
       { _id: req.params.id, tenantId: req.user.tenantId }, // শুধু নিজের দোকানের কাস্টমার এডিট করা যাবে
       req.body,
-      { new: true }, // আপডেট হওয়ার পর নতুন ডাটা রিটার্ন করবে
+      { returnDocument: "after" }, // আপডেট হওয়ার পর নতুন ডাটা রিটার্ন করবে
     );
 
     if (!updatedCustomer) {

@@ -100,7 +100,7 @@ router.patch(
       const updatedShop = await Tenant.findByIdAndUpdate(
         req.params.id,
         { name: shopName, status },
-        { new: true },
+        { returnDocument: "after" },
       );
       res.json(updatedShop);
     } catch (error) {

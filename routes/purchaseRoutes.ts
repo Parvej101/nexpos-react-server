@@ -129,7 +129,7 @@ router.post("/payment/:purchaseId", verifyToken, async (req: any, res: any) => {
         },
         $push: { payments: newPayment }, // টাইমলাইনের জন্য পুশ করা হলো
       },
-      { new: true },
+      { returnDocument: "after" },
     );
 
     res.status(200).json({

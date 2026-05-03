@@ -39,7 +39,7 @@ router.patch("/:id", verifyToken, async (req: any, res: any) => {
     const updated = await Supplier.findOneAndUpdate(
       { _id: req.params.id, tenantId: req.user.tenantId },
       req.body,
-      { new: true },
+      { returnDocument: "after" },
     );
     if (!updated)
       return res.status(404).json({ message: "Supplier not found" });

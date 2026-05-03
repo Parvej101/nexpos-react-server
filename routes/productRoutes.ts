@@ -90,7 +90,7 @@ router.patch("/:id", verifyToken, async (req: any, res: any) => {
     const updatedProduct = await Product.findOneAndUpdate(
       { _id: req.params.id, tenantId: req.user.tenantId },
       req.body,
-      { new: true },
+      { returnDocument: "after" },
     );
     res.json(updatedProduct);
   } catch (error) {
